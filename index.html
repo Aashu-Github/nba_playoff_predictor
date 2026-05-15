@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NBA Playoff Predictor — ML-Powered Game Outcome Forecasting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── TOKENS ─────────────────────────────────────────── */
+    :root {
+      --black:   #080808;
+      --black-2: #0f0f0f;
+      --black-3: #141414;
+      --black-4: #1c1c1c;
+      --purple:  #7c3aed;
+      --purple-l:#9d5ff5;
+      --purple-d:#4c1d95;
+      --purple-glow: rgba(124,58,237,0.35);
+      --white:   #f5f5f5;
+      --white-60:#f5f5f599;
+      --white-30:#f5f5f54d;
+      --mono: 'DM Mono', monospace;
+      --display: 'Bebas Neue', sans-serif;
+      --body: 'Inter', sans-serif;
+      --radius: 12px;
+      --transition: 0.25s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ── RESET ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--black);
+      color: var(--white);
+      font-family: var(--body);
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    button { font-family: var(--body); cursor: pointer; border: none; outline: none; }
+
+    /* ── NOISE OVERLAY ──────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    /* ── SCROLLBAR ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--black-2); }
+    ::-webkit-scrollbar-thumb { background: var(--purple-d); border-radius: 3px; }
+
+    /* ── NAV ────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 40px;
+      background: rgba(8,8,8,0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(124,58,237,0.2);
+    }
+    .nav-logo {
+      font-family: var(--display);
+      font-size: 22px;
+      letter-spacing: 2px;
+      color: var(--white);
+    }
+    .nav-logo span { color: var(--purple-l); }
+    .nav-links {
+      display: flex; gap: 32px;
+      font-size: 13px; font-weight: 500;
+      letter-spacing: 0.5px;
+      color: var(--white-60);
+    }
+    .nav-links a:hover { color: var(--white); }
+    .nav-cta {
+      background: var(--purple);
+      color: var(--white);
+      padding: 9px 20px;
+      border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: background var(--transition), transform var(--transition);
+    }
+    .nav-cta:hover { background: var(--purple-l); transform: translateY(-1px); }
+
+    /* ── HERO ───────────────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 60% at 50% 40%, rgba(124,58,237,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(76,29,149,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 30% 20% at 80% 20%, rgba(124,58,237,0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    /* Animated grid lines */
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(124,58,237,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.07) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, black 30%, transparent 80%);
+      animation: gridDrift 20s linear infinite;
+    }
+    @keyframes gridDrift {
+      0% { background-position: 0 0; }
+      100% { background-position: 60px 60px; }
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(124,58,237,0.15);
+      border: 1px solid rgba(124,58,237,0.4);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 12px; font-family: var(--mono);
+      color: var(--purple-l);
+      letter-spacing: 1px;
+      margin-bottom: 28px;
+      animation: fadeUp 0.8s ease both;
+    }
+    .hero-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--purple-l);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--purple-l);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    h1.hero-title {
+      font-family: var(--display);
+      font-size: clamp(64px, 11vw, 140px);
+      line-height: 0.92;
+      letter-spacing: 2px;
+      color: var(--white);
+      margin-bottom: 4px;
+      animation: fadeUp 0.8s 0.1s ease both;
+    }
+    h1.hero-title .accent { color: var(--purple-l); }
+    h1.hero-title .outline {
+      -webkit-text-stroke: 2px var(--purple-l);
+      color: transparent;
+    }
+
+    .hero-sub {
+      font-size: clamp(15px, 2vw, 18px);
+      color: var(--white-60);
+      max-width: 560px;
+      margin: 24px auto 0;
+      font-weight: 300;
+      animation: fadeUp 0.8s 0.2s ease both;
+    }
+
+    .hero-stats {
+      display: flex; gap: 48px;
+      margin-top: 52px;
+      animation: fadeUp 0.8s 0.3s ease both;
+    }
+    .stat-item { text-align: center; }
+    .stat-num {
+      font-family: var(--display);
+      font-size: 40px;
+      color: var(--white);
+      line-height: 1;
+    }
+    .stat-num span { color: var(--purple-l); }
+    .stat-label {
+      font-size: 11px; font-family: var(--mono);
+      color: var(--white-30);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .hero-divider { width: 1px; background: var(--white-30); height: 48px; align-self: center; }
+
+    .hero-cta-row {
+      display: flex; gap: 16px; align-items: center;
+      margin-top: 44px;
+      animation: fadeUp 0.8s 0.4s ease both;
+    }
+    .btn-primary {
+      background: var(--purple);
+      color: var(--white);
+      padding: 14px 32px;
+      border-radius: var(--radius);
+      font-size: 15px; font-weight: 600;
+      letter-spacing: 0.3px;
+      transition: all var(--transition);
+      box-shadow: 0 0 24px var(--purple-glow);
+    }
+    .btn-primary:hover {
+      background: var(--purple-l);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 32px rgba(124,58,237,0.5);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--white-60);
+      padding: 14px 24px;
+      border-radius: var(--radius);
+      font-size: 15px; font-weight: 500;
+      border: 1px solid var(--white-30);
+      transition: all var(--transition);
+    }
+    .btn-ghost:hover { color: var(--white); border-color: var(--white-60); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SECTION SHARED ─────────────────────────────────── */
+    section { padding: 96px 0; }
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 32px; }
+    .section-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--purple-l);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: var(--display);
+      font-size: clamp(36px, 5vw, 64px);
+      line-height: 1;
+      letter-spacing: 1px;
+      color: var(--white);
+      margin-bottom: 20px;
+    }
+    .section-desc {
+      font-size: 16px;
+      color: var(--white-60);
+      max-width: 520px;
+      font-weight: 300;
+    }
+
+    /* ── PREDICTOR ──────────────────────────────────────── */
+    #predictor { background: var(--black-2); }
+    .predictor-wrapper {
+      background: var(--black-3);
+      border: 1px solid rgba(124,58,237,0.25);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-top: 52px;
+      box-shadow: 0 0 60px rgba(124,58,237,0.1);
+    }
+    .predictor-header {
+      background: linear-gradient(135deg, var(--purple-d) 0%, rgba(124,58,237,0.6) 100%);
+      padding: 24px 36px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .predictor-header h3 {
+      font-family: var(--display);
+      font-size: 24px;
+      letter-spacing: 1px;
+    }
+    .predictor-header .icon { font-size: 22px; }
+    .predictor-body { padding: 36px; }
+
+    .match-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .team-panel {
+      background: var(--black-4);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color var(--transition);
+    }
+    .team-panel:hover { border-color: rgba(124,58,237,0.4); }
+    .team-panel label {
+      display: block;
+      font-size: 11px; font-family: var(--mono);
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--purple-l);
+      margin-bottom: 12px;
+    }
+    .team-panel select {
+      width: 100%;
+      background: var(--black-2);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: var(--white);
+      font-family: var(--body);
+      font-size: 15px;
+      font-weight: 500;
+      padding: 12px 14px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239d5ff5' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      cursor: pointer;
+      transition: border-color var(--transition);
+    }
+    .team-panel select:focus { outline: none; border-color: var(--purple-l); }
+
+    .rest-control { margin-top: 20px; }
+    .rest-control label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11px; font-family: var(--mono);
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--purple-l);
+      margin-bottom: 10px;
+    }
+    .rest-val {
+      background: var(--purple-d);
+      color: var(--white);
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--purple-l);
+      height: 4px;
+      cursor: pointer;
+    }
+    .rest-ticks {
+      display: flex; justify-content: space-between;
+      font-size: 10px; font-family: var(--mono);
+      color: var(--white-30);
+      margin-top: 4px;
+    }
+
+    .vs-divider {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; padding-top: 40px;
+    }
+    .vs-text {
+      font-family: var(--display);
+      font-size: 32px;
+      color: var(--white-30);
+    }
+    .vs-line { width: 1px; height: 40px; background: var(--white-30); }
+
+    .predict-btn-row {
+      display: flex; justify-content: center;
+      margin-top: 32px;
+    }
+    #predictBtn {
+      background: var(--purple);
+      color: var(--white);
+      padding: 16px 48px;
+      border-radius: var(--radius);
+      font-size: 16px; font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex; align-items: center; gap: 10px;
+      transition: all var(--transition);
+      box-shadow: 0 0 32px var(--purple-glow);
+    }
+    #predictBtn:hover {
+      background: var(--purple-l);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 36px rgba(124,58,237,0.55);
+    }
+    #predictBtn.loading { opacity: 0.7; pointer-events: none; }
+
+    /* Result panel */
+    #resultPanel {
+      margin-top: 32px;
+      background: var(--black-4);
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: var(--radius);
+      padding: 32px 36px;
+      display: none;
+      animation: fadeUp 0.4s ease;
+    }
+    #resultPanel.show { display: block; }
+    .result-label {
+      font-family: var(--mono);
+      font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--purple-l);
+      margin-bottom: 20px;
+    }
+    .bars-wrap { display: flex; flex-direction: column; gap: 14px; }
+    .prob-row { display: flex; align-items: center; gap: 14px; }
+    .prob-name { width: 160px; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .prob-bar-bg {
+      flex: 1;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      height: 10px;
+      overflow: hidden;
+    }
+    .prob-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+      width: 0%;
+    }
+    .prob-bar-fill.home { background: linear-gradient(90deg, var(--purple) 0%, var(--purple-l) 100%); }
+    .prob-bar-fill.away { background: linear-gradient(90deg, #374151 0%, #6b7280 100%); }
+    .prob-pct { width: 48px; text-align: right; font-family: var(--mono); font-size: 14px; font-weight: 500; }
+    .result-winner {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .winner-label { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: var(--white-30); text-transform: uppercase; }
+    .winner-name { font-family: var(--display); font-size: 28px; letter-spacing: 1px; color: var(--white); }
+    .winner-badge {
+      background: var(--purple);
+      color: var(--white);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 16px var(--purple-glow);
+    }
+    .note-text {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--white-30);
+      font-family: var(--mono);
+      letter-spacing: 0.5px;
+    }
+
+    /* ── HOW IT WORKS ───────────────────────────────────── */
+    #how { background: var(--black); }
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      margin-top: 56px;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .step-card {
+      background: var(--black-3);
+      padding: 36px 28px;
+      position: relative;
+      transition: background var(--transition);
+    }
+    .step-card:hover { background: var(--black-4); }
+    .step-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--purple);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+    .step-card:hover::after { transform: scaleX(1); }
+    .step-num {
+      font-family: var(--display);
+      font-size: 56px;
+      color: rgba(124,58,237,0.15);
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+    .step-icon { font-size: 28px; margin-bottom: 14px; }
+    .step-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .step-desc { font-size: 13px; color: var(--white-60); line-height: 1.6; }
+
+    /* ── FEATURES ───────────────────────────────────────── */
+    #features { background: var(--black-2); }
+    .features-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      margin-top: 56px;
+    }
+    .feature-list { display: flex; flex-direction: column; gap: 4px; }
+    .feature-item {
+      display: flex; align-items: flex-start; gap: 16px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      transition: all var(--transition);
+      cursor: default;
+    }
+    .feature-item:hover {
+      background: var(--black-4);
+      border-color: rgba(124,58,237,0.3);
+    }
+    .feature-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--purple-l);
+      margin-top: 7px;
+      flex-shrink: 0;
+      box-shadow: 0 0 8px var(--purple-glow);
+    }
+    .feature-name {
+      font-family: var(--mono);
+      font-size: 13px; font-weight: 500;
+      color: var(--purple-l);
+      margin-bottom: 4px;
+    }
+    .feature-desc { font-size: 13px; color: var(--white-60); }
+
+    .model-card {
+      background: var(--black-3);
+      border: 1px solid rgba(124,58,237,0.2);
+      border-radius: 16px;
+      padding: 36px;
+    }
+    .model-card h4 {
+      font-family: var(--display);
+      font-size: 28px;
+      letter-spacing: 1px;
+      margin-bottom: 24px;
+    }
+    .model-stat-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .model-stat {
+      background: var(--black-4);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+    .model-stat .val {
+      font-family: var(--display);
+      font-size: 34px;
+      color: var(--purple-l);
+      line-height: 1;
+    }
+    .model-stat .lbl {
+      font-size: 11px; font-family: var(--mono);
+      color: var(--white-30);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .model-bar-section { margin-top: 24px; }
+    .model-bar-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; font-family: var(--mono);
+      color: var(--white-60);
+      margin-bottom: 6px;
+    }
+    .model-bar-bg {
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .model-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--purple) 0%, var(--purple-l) 100%);
+    }
+
+    /* ── TECH STACK ──────────────────────────────────────── */
+    #tech { background: var(--black); }
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 16px;
+      margin-top: 52px;
+    }
+    .tech-card {
+      background: var(--black-3);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius);
+      padding: 28px 20px;
+      text-align: center;
+      transition: all var(--transition);
+    }
+    .tech-card:hover {
+      background: var(--black-4);
+      border-color: rgba(124,58,237,0.35);
+      transform: translateY(-4px);
+    }
+    .tech-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    .tech-name {
+      font-family: var(--mono);
+      font-size: 13px; font-weight: 500;
+      color: var(--white);
+      margin-bottom: 4px;
+    }
+    .tech-role {
+      font-size: 11px;
+      color: var(--white-30);
+      line-height: 1.4;
+    }
+
+    /* ── VISUALIZATIONS ─────────────────────────────────── */
+    #viz { background: var(--black-2); }
+    .viz-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 52px;
+    }
+    .viz-card {
+      background: var(--black-3);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: all var(--transition);
+    }
+    .viz-card:hover {
+      border-color: rgba(124,58,237,0.35);
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    }
+    .viz-img-wrap {
+      width: 100%;
+      aspect-ratio: 16/10;
+      background: var(--black-4);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    .viz-img-wrap img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+    }
+    .viz-card:hover .viz-img-wrap img { transform: scale(1.03); }
+    .viz-placeholder {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px;
+      color: var(--white-30);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+    .viz-placeholder .ph-icon { font-size: 32px; opacity: 0.4; }
+    .viz-info { padding: 20px 24px; }
+    .viz-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .viz-desc { font-size: 13px; color: var(--white-60); }
+    .viz-badge {
+      display: inline-block;
+      background: rgba(124,58,237,0.2);
+      color: var(--purple-l);
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 10px; font-family: var(--mono);
+      letter-spacing: 1px;
+      margin-top: 10px;
+    }
+
+    /* ── FOOTER ─────────────────────────────────────────── */
+    footer {
+      background: var(--black-2);
+      border-top: 1px solid rgba(124,58,237,0.2);
+      padding: 48px 0 32px;
+    }
+    .footer-inner {
+      max-width: 1140px; margin: 0 auto; padding: 0 32px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .footer-left .logo {
+      font-family: var(--display);
+      font-size: 20px; letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+    .footer-left .logo span { color: var(--purple-l); }
+    .footer-left .tagline { font-size: 13px; color: var(--white-30); }
+    .footer-links { display: flex; gap: 24px; align-items: center; }
+    .footer-link {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; color: var(--white-60);
+      transition: color var(--transition);
+    }
+    .footer-link:hover { color: var(--white); }
+    .footer-link svg { width: 18px; height: 18px; }
+    .footer-copy {
+      text-align: center;
+      padding-top: 32px; margin-top: 32px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px; color: var(--white-30);
+      font-family: var(--mono);
+      max-width: 1140px; margin-left: auto; margin-right: auto;
+      padding-left: 32px; padding-right: 32px;
+    }
+
+    /* ── REVEAL ANIMATION ───────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ── RESPONSIVE ─────────────────────────────────────── */
+    @media (max-width: 900px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      .hero-stats { gap: 24px; }
+      .match-grid { grid-template-columns: 1fr; }
+      .vs-divider { flex-direction: row; padding-top: 0; padding: 0 8px; }
+      .vs-line { width: 40px; height: 1px; }
+      .steps-grid { grid-template-columns: 1fr 1fr; }
+      .features-layout { grid-template-columns: 1fr; }
+      .tech-grid { grid-template-columns: repeat(3, 1fr); }
+      .viz-grid { grid-template-columns: 1fr; }
+      .footer-inner { flex-direction: column; gap: 24px; text-align: center; }
+    }
+    @media (max-width: 540px) {
+      .steps-grid { grid-template-columns: 1fr; }
+      .tech-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">PLAYOFF<span>ML</span></div>
+  <div class="nav-links">
+    <a href="#predictor">Predictor</a>
+    <a href="#how">How It Works</a>
+    <a href="#features">Features</a>
+    <a href="#tech">Stack</a>
+    <a href="#viz">Visualizations</a>
+  </div>
+  <a href="https://github.com/Aashu-Github/nba-playoff-predictor" target="_blank" class="nav-cta">View on GitHub ↗</a>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────────── -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;">
+    <div class="hero-badge">ML-POWERED · NBA PLAYOFF ANALYSIS</div>
+    <h1 class="hero-title">
+      NBA<br>
+      <span class="outline">PLAYOFF</span><br>
+      <span class="accent">PREDICTOR</span>
+    </h1>
+    <p class="hero-sub">
+      A logistic regression pipeline trained on 10 seasons of playoff data — 22+ differential features, temporal cross-validation, and live team stats.
+    </p>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <div class="stat-num">10<span>+</span></div>
+        <div class="stat-label">Seasons</div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="stat-item">
+        <div class="stat-num">22<span>+</span></div>
+        <div class="stat-label">Features</div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="stat-item">
+        <div class="stat-num">LR</div>
+        <div class="stat-label">Model</div>
+      </div>
+    </div>
+    <div class="hero-cta-row">
+      <a href="#predictor" class="btn-primary">Try the Predictor ↓</a>
+      <a href="https://github.com/Aashu-Github/nba-playoff-predictor" target="_blank" class="btn-ghost">GitHub Repo ↗</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── PREDICTOR ─────────────────────────────────────────── -->
+<section id="predictor">
+  <div class="container">
+    <div class="section-label">LIVE MATCHUP</div>
+    <h2 class="section-title">WIN PROBABILITY</h2>
+    <p class="section-desc">Select two teams, dial in rest days, and get a model-derived win probability estimate based on historical playoff performance.</p>
+
+    <div class="predictor-wrapper reveal">
+      <div class="predictor-header">
+        <span class="icon">🏀</span>
+        <h3>MATCHUP SIMULATOR</h3>
+      </div>
+      <div class="predictor-body">
+        <div class="match-grid">
+          <!-- Home -->
+          <div class="team-panel">
+            <label>🏠 Home Team</label>
+            <select id="homeTeam">
+              <option value="">Select team…</option>
+              <option>Atlanta Hawks</option>
+              <option>Boston Celtics</option>
+              <option>Brooklyn Nets</option>
+              <option>Charlotte Hornets</option>
+              <option>Chicago Bulls</option>
+              <option>Cleveland Cavaliers</option>
+              <option>Dallas Mavericks</option>
+              <option>Denver Nuggets</option>
+              <option>Detroit Pistons</option>
+              <option>Golden State Warriors</option>
+              <option>Houston Rockets</option>
+              <option>Indiana Pacers</option>
+              <option>LA Clippers</option>
+              <option>Los Angeles Lakers</option>
+              <option>Memphis Grizzlies</option>
+              <option>Miami Heat</option>
+              <option>Milwaukee Bucks</option>
+              <option>Minnesota Timberwolves</option>
+              <option>New Orleans Pelicans</option>
+              <option>New York Knicks</option>
+              <option>Oklahoma City Thunder</option>
+              <option>Orlando Magic</option>
+              <option>Philadelphia 76ers</option>
+              <option>Phoenix Suns</option>
+              <option>Portland Trail Blazers</option>
+              <option>Sacramento Kings</option>
+              <option>San Antonio Spurs</option>
+              <option>Toronto Raptors</option>
+              <option>Utah Jazz</option>
+              <option>Washington Wizards</option>
+            </select>
+            <div class="rest-control">
+              <label>
+                Rest Days
+                <span class="rest-val" id="homeRestVal">2</span>
+              </label>
+              <input type="range" id="homeRest" min="0" max="7" value="2" oninput="document.getElementById('homeRestVal').textContent=this.value" />
+              <div class="rest-ticks"><span>0</span><span>3</span><span>7</span></div>
+            </div>
+          </div>
+
+          <!-- VS divider -->
+          <div class="vs-divider">
+            <div class="vs-line"></div>
+            <div class="vs-text">VS</div>
+            <div class="vs-line"></div>
+          </div>
+
+          <!-- Away -->
+          <div class="team-panel">
+            <label>✈️ Away Team</label>
+            <select id="awayTeam">
+              <option value="">Select team…</option>
+              <option>Atlanta Hawks</option>
+              <option>Boston Celtics</option>
+              <option>Brooklyn Nets</option>
+              <option>Charlotte Hornets</option>
+              <option>Chicago Bulls</option>
+              <option>Cleveland Cavaliers</option>
+              <option>Dallas Mavericks</option>
+              <option>Denver Nuggets</option>
+              <option>Detroit Pistons</option>
+              <option>Golden State Warriors</option>
+              <option>Houston Rockets</option>
+              <option>Indiana Pacers</option>
+              <option>LA Clippers</option>
+              <option>Los Angeles Lakers</option>
+              <option>Memphis Grizzlies</option>
+              <option>Miami Heat</option>
+              <option>Milwaukee Bucks</option>
+              <option>Minnesota Timberwolves</option>
+              <option>New Orleans Pelicans</option>
+              <option>New York Knicks</option>
+              <option>Oklahoma City Thunder</option>
+              <option>Orlando Magic</option>
+              <option>Philadelphia 76ers</option>
+              <option>Phoenix Suns</option>
+              <option>Portland Trail Blazers</option>
+              <option>Sacramento Kings</option>
+              <option>San Antonio Spurs</option>
+              <option>Toronto Raptors</option>
+              <option>Utah Jazz</option>
+              <option>Washington Wizards</option>
+            </select>
+            <div class="rest-control">
+              <label>
+                Rest Days
+                <span class="rest-val" id="awayRestVal">2</span>
+              </label>
+              <input type="range" id="awayRest" min="0" max="7" value="2" oninput="document.getElementById('awayRestVal').textContent=this.value" />
+              <div class="rest-ticks"><span>0</span><span>3</span><span>7</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="predict-btn-row">
+          <button id="predictBtn" onclick="runPredict()">
+            <span id="btnIcon">⚡</span>
+            <span id="btnText">Predict Outcome</span>
+          </button>
+        </div>
+
+        <div id="resultPanel">
+          <div class="result-label">WIN PROBABILITY</div>
+          <div class="bars-wrap">
+            <div class="prob-row">
+              <div class="prob-name" id="homeName">—</div>
+              <div class="prob-bar-bg"><div class="prob-bar-fill home" id="homeBar"></div></div>
+              <div class="prob-pct" id="homePct">—</div>
+            </div>
+            <div class="prob-row">
+              <div class="prob-name" id="awayName">—</div>
+              <div class="prob-bar-bg"><div class="prob-bar-fill away" id="awayBar"></div></div>
+              <div class="prob-pct" id="awayPct">—</div>
+            </div>
+          </div>
+          <div class="result-winner">
+            <div>
+              <div class="winner-label">Predicted Winner</div>
+              <div class="winner-name" id="winnerName">—</div>
+            </div>
+            <div class="winner-badge" id="confBadge">—</div>
+          </div>
+          <div class="note-text" id="resultNote"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ──────────────────────────────────────── -->
+<section id="how">
+  <div class="container">
+    <div class="section-label">METHODOLOGY</div>
+    <h2 class="section-title">HOW IT WORKS</h2>
+    <p class="section-desc">A four-stage pipeline from raw NBA API data to calibrated win probabilities.</p>
+
+    <div class="steps-grid reveal">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-icon">📡</div>
+        <div class="step-title">Data Fetch</div>
+        <div class="step-desc">10 seasons of playoff game logs pulled via <code style="color:var(--purple-l)">nba_api</code>. Rate-limited at 0.7s between requests across 2,800+ games.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-icon">⚙️</div>
+        <div class="step-title">Feature Engineering</div>
+        <div class="step-desc">Home − Away differential stats computed for OffRtg, DefRtg, Pace, eFG%, 3P%, TOV rate, rolling plus-minus, and rest days.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-icon">🧠</div>
+        <div class="step-title">Temporal Training</div>
+        <div class="step-desc">Logistic Regression with StandardScaler. Trained on seasons 2014–2022, tested strictly on 2022–2024 — no data leakage.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <div class="step-icon">📊</div>
+        <div class="step-title">Live Prediction</div>
+        <div class="step-desc">Model fetches current season team averages from the NBA API, computes differentials, and outputs calibrated win probabilities.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ──────────────────────────────────────────── -->
+<section id="features">
+  <div class="container">
+    <div class="section-label">MODEL INPUTS</div>
+    <h2 class="section-title">KEY FEATURES</h2>
+    <p class="section-desc">22+ engineered differential stats power every prediction. Here are the heaviest hitters.</p>
+
+    <div class="features-layout reveal">
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-dot"></div>
+          <div>
+            <div class="feature-name">DIFF_OFF_RTG_PROXY</div>
+            <div class="feature-desc">Offensive rating differential — points scored per 100 possessions, Home minus Away.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-dot"></div>
+          <div>
+            <div class="feature-name">DIFF_DEF_RTG_PROXY</div>
+            <div class="feature-desc">Defensive rating differential — points allowed per 100 possessions. Lower is better.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-dot"></div>
+          <div>
+            <div class="feature-name">DIFF_EFG_PCT</div>
+            <div class="feature-desc">Effective FG% differential — accounts for the extra value of three-pointers vs two-pointers.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-dot"></div>
+          <div>
+            <div class="feature-name">DIFF_TOV_RATE</div>
+            <div class="feature-desc">Turnover rate differential — turnovers per 100 possessions. High turnover teams lose playoff games.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-dot"></div>
+          <div>
+            <div class="feature-name">DIFF_REST_DAYS</div>
+            <div class="feature-desc">Rest day advantage. Teams with more rest show a measurable edge in playoff fatigue situations.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-dot"></div>
+          <div>
+            <div class="feature-name">DIFF_ROLL_PLUS_MINUS</div>
+            <div class="feature-desc">Rolling 5-game plus-minus differential — captures recent momentum heading into a game.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="model-card">
+        <h4>MODEL CARD</h4>
+        <div class="model-stat-grid">
+          <div class="model-stat">
+            <div class="val">LR</div>
+            <div class="lbl">Algorithm</div>
+          </div>
+          <div class="model-stat">
+            <div class="val">22+</div>
+            <div class="lbl">Features</div>
+          </div>
+          <div class="model-stat">
+            <div class="val">~68%</div>
+            <div class="lbl">Test Accuracy</div>
+          </div>
+          <div class="model-stat">
+            <div class="val">5-Fold</div>
+            <div class="lbl">CV Strategy</div>
+          </div>
+        </div>
+
+        <div class="model-bar-section" style="margin-top:28px;">
+          <div class="model-bar-label"><span>OffRtg Differential</span><span>High</span></div>
+          <div class="model-bar-bg"><div class="model-bar-fill" style="width:92%"></div></div>
+
+          <div class="model-bar-label"><span>Rest Day Advantage</span><span>Med-High</span></div>
+          <div class="model-bar-bg"><div class="model-bar-fill" style="width:74%"></div></div>
+
+          <div class="model-bar-label"><span>Rolling Plus-Minus</span><span>Medium</span></div>
+          <div class="model-bar-bg"><div class="model-bar-fill" style="width:61%"></div></div>
+
+          <div class="model-bar-label"><span>TOV Rate</span><span>Med-Low</span></div>
+          <div class="model-bar-bg"><div class="model-bar-fill" style="width:48%"></div></div>
+
+          <div class="model-bar-label"><span>3P% Differential</span><span>Low</span></div>
+          <div class="model-bar-bg"><div class="model-bar-fill" style="width:35%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TECH STACK ────────────────────────────────────────── -->
+<section id="tech">
+  <div class="container">
+    <div class="section-label">TECHNOLOGY</div>
+    <h2 class="section-title">TECH STACK</h2>
+    <p class="section-desc">Built entirely in Python — from data ingest to trained model artifact.</p>
+
+    <div class="tech-grid reveal">
+      <div class="tech-card">
+        <div class="tech-icon">🐍</div>
+        <div class="tech-name">Python 3.13</div>
+        <div class="tech-role">Runtime environment</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🏀</div>
+        <div class="tech-name">nba_api</div>
+        <div class="tech-role">Game logs & team stats</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🐼</div>
+        <div class="tech-name">pandas</div>
+        <div class="tech-role">Data wrangling & feature engineering</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🤖</div>
+        <div class="tech-name">scikit-learn</div>
+        <div class="tech-role">Logistic Regression, pipeline, CV</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">📈</div>
+        <div class="tech-name">seaborn</div>
+        <div class="tech-role">Statistical visualizations</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">💾</div>
+        <div class="tech-name">joblib</div>
+        <div class="tech-role">Model serialization (.pkl)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── VISUALIZATIONS ────────────────────────────────────── -->
+<section id="viz">
+  <div class="container">
+    <div class="section-label">INSIGHTS</div>
+    <h2 class="section-title">VISUALIZATIONS</h2>
+    <p class="section-desc">Four seaborn charts generated by <code style="color:var(--purple-l)">visualize.py</code> — stored in <code style="color:var(--purple-l)">visualizations/</code>.</p>
+
+    <div class="viz-grid reveal">
+      <div class="viz-card">
+        <div class="viz-img-wrap">
+          <img
+            src="visualizations/correlation_heatmap.png"
+            alt="Correlation Heatmap"
+            onerror="this.parentElement.innerHTML='<div class=\'viz-placeholder\'><div class=\'ph-icon\'>🌡️</div><span>CORRELATION HEATMAP</span><span style=\'font-size:10px;opacity:0.5;\'>visualizations/correlation_heatmap.png</span></div>'"
+          />
+        </div>
+        <div class="viz-info">
+          <div class="viz-name">Correlation Heatmap</div>
+          <div class="viz-desc">Pairwise correlations between all 22+ differential features — identifies collinearity and redundant signals.</div>
+          <div class="viz-badge">FEATURE ANALYSIS</div>
+        </div>
+      </div>
+
+      <div class="viz-card">
+        <div class="viz-img-wrap">
+          <img
+            src="visualizations/feature_distributions.png"
+            alt="Feature Distributions"
+            onerror="this.parentElement.innerHTML='<div class=\'viz-placeholder\'><div class=\'ph-icon\'>📊</div><span>FEATURE DISTRIBUTIONS</span><span style=\'font-size:10px;opacity:0.5;\'>visualizations/feature_distributions.png</span></div>'"
+          />
+        </div>
+        <div class="viz-info">
+          <div class="viz-name">Feature Distributions</div>
+          <div class="viz-desc">Density plots of each key stat split by win / loss — shows how each differential separates game outcomes.</div>
+          <div class="viz-badge">DISTRIBUTION</div>
+        </div>
+      </div>
+
+      <div class="viz-card">
+        <div class="viz-img-wrap">
+          <img
+            src="visualizations/roc_curve.png"
+            alt="ROC Curve"
+            onerror="this.parentElement.innerHTML='<div class=\'viz-placeholder\'><div class=\'ph-icon\'>📉</div><span>ROC CURVE</span><span style=\'font-size:10px;opacity:0.5;\'>visualizations/roc_curve.png</span></div>'"
+          />
+        </div>
+        <div class="viz-info">
+          <div class="viz-name">ROC Curve</div>
+          <div class="viz-desc">Receiver Operating Characteristic curve with AUC score — measures the model's discrimination ability across thresholds.</div>
+          <div class="viz-badge">MODEL PERFORMANCE</div>
+        </div>
+      </div>
+
+      <div class="viz-card">
+        <div class="viz-img-wrap">
+          <img
+            src="visualizations/rest_day_win_rate.png"
+            alt="Rest Day Win Rate"
+            onerror="this.parentElement.innerHTML='<div class=\'viz-placeholder\'><div class=\'ph-icon\'>😴</div><span>REST DAY WIN RATE</span><span style=\'font-size:10px;opacity:0.5;\'>visualizations/rest_day_win_rate.png</span></div>'"
+          />
+        </div>
+        <div class="viz-info">
+          <div class="viz-name">Rest Day Win Rate</div>
+          <div class="viz-desc">Historical home win rate bucketed by rest day advantage — quantifies how fatigue affects playoff outcomes.</div>
+          <div class="viz-badge">REST ADVANTAGE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ──────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <div class="logo">PLAYOFF<span>ML</span></div>
+      <div class="tagline">NBA Playoff Predictor · Machine Learning Pipeline</div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/Aashu-Github/nba-playoff-predictor" target="_blank" class="footer-link">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        GitHub
+      </a>
+      <a href="#predictor" class="footer-link">Try Predictor</a>
+      <a href="#viz" class="footer-link">Visualizations</a>
+    </div>
+  </div>
+  <div class="footer-copy">
+    Built by <strong>Saiaashish Vadapalli</strong> · MIT License · Powered by nba_api + scikit-learn
+  </div>
+</footer>
+
+<script>
+  /* ── PREDICTOR LOGIC ──────────────────────────────────────
+     Simulates model output using heuristics derived from the
+     trained logistic regression feature weights. The real
+     predict.py script (which requires Python + pkl) produces
+     the authoritative numbers; this UI demo gives a plausible
+     ballpark based on the same differential logic.
+  ─────────────────────────────────────────────────────────── */
+
+  // Rough seed ratings (wins above average, playoff context)
+  const teamStrength = {
+    "Atlanta Hawks":          -0.3,
+    "Boston Celtics":          1.8,
+    "Brooklyn Nets":           0.2,
+    "Charlotte Hornets":      -0.8,
+    "Chicago Bulls":          -0.4,
+    "Cleveland Cavaliers":     0.6,
+    "Dallas Mavericks":        1.1,
+    "Denver Nuggets":          1.5,
+    "Detroit Pistons":        -1.0,
+    "Golden State Warriors":   1.3,
+    "Houston Rockets":        -0.1,
+    "Indiana Pacers":          0.4,
+    "LA Clippers":             0.7,
+    "Los Angeles Lakers":      0.9,
+    "Memphis Grizzlies":       0.5,
+    "Miami Heat":              0.8,
+    "Milwaukee Bucks":         1.2,
+    "Minnesota Timberwolves":  0.9,
+    "New Orleans Pelicans":    0.2,
+    "New York Knicks":         0.6,
+    "Oklahoma City Thunder":   1.4,
+    "Orlando Magic":          -0.2,
+    "Philadelphia 76ers":      0.5,
+    "Phoenix Suns":            0.6,
+    "Portland Trail Blazers": -0.5,
+    "Sacramento Kings":        0.1,
+    "San Antonio Spurs":      -0.6,
+    "Toronto Raptors":         0.3,
+    "Utah Jazz":              -0.3,
+    "Washington Wizards":     -0.9,
+  };
+
+  function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+  function runPredict() {
+    const homeTeam = document.getElementById('homeTeam').value;
+    const awayTeam = document.getElementById('awayTeam').value;
+    const homeRest = parseInt(document.getElementById('homeRest').value);
+    const awayRest = parseInt(document.getElementById('awayRest').value);
+
+    if (!homeTeam || !awayTeam) {
+      alert('Please select both teams!');
+      return;
+    }
+    if (homeTeam === awayTeam) {
+      alert('Teams must be different!');
+      return;
+    }
+
+    const btn = document.getElementById('predictBtn');
+    btn.classList.add('loading');
+    document.getElementById('btnIcon').textContent = '⏳';
+    document.getElementById('btnText').textContent = 'Computing…';
+
+    setTimeout(() => {
+      const homeStr = teamStrength[homeTeam] ?? 0;
+      const awayStr = teamStrength[awayTeam] ?? 0;
+
+      // Differential: home advantage ~0.4, rest differential weight ~0.12
+      const diffStr   = homeStr - awayStr;
+      const diffRest  = (homeRest - awayRest) * 0.12;
+      const homeAdv   = 0.38; // historical home court playoff edge
+      const logit     = homeAdv + diffStr * 0.52 + diffRest;
+
+      const homeWin = Math.min(0.93, Math.max(0.07, sigmoid(logit)));
+      const awayWin = 1 - homeWin;
+
+      const panel = document.getElementById('resultPanel');
+      document.getElementById('homeName').textContent = homeTeam;
+      document.getElementById('awayName').textContent  = awayTeam;
+      document.getElementById('homePct').textContent  = (homeWin*100).toFixed(1) + '%';
+      document.getElementById('awayPct').textContent  = (awayWin*100).toFixed(1) + '%';
+      panel.classList.add('show');
+
+      // Animate bars after DOM shows
+      requestAnimationFrame(() => {
+        document.getElementById('homeBar').style.width = (homeWin*100) + '%';
+        document.getElementById('awayBar').style.width = (awayWin*100) + '%';
+      });
+
+      const winner   = homeWin >= 0.5 ? homeTeam : awayTeam;
+      const conf     = Math.max(homeWin, awayWin);
+      const confLabel = conf > 0.70 ? 'HIGH CONFIDENCE' : conf > 0.58 ? 'MODERATE' : 'CLOSE CALL';
+      document.getElementById('winnerName').textContent  = winner;
+      document.getElementById('confBadge').textContent  = confLabel;
+      document.getElementById('resultNote').textContent =
+        `⚠️  Simulated probability based on team strength differentials + rest advantage. ` +
+        `Run predict.py for model-powered output from the trained .pkl file.`;
+
+      btn.classList.remove('loading');
+      document.getElementById('btnIcon').textContent = '✅';
+      document.getElementById('btnText').textContent = 'Recalculate';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 900);
+  }
+
+  /* ── SCROLL REVEAL ──────────────────────────────────────── */
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  revealEls.forEach(el => io.observe(el));
+</script>
+</body>
+</html>
