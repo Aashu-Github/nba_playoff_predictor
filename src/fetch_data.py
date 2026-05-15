@@ -15,11 +15,8 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
-from nba_api.stats.endpoints import (
-    leaguegamelog,
-    teamdashboardbyteamperformance,
-    teamgamelogs,
-)
+from nba_api.stats.endpoints import leaguegamelog, teamgamelogs
+
 from nba_api.stats.static import teams
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -42,7 +39,6 @@ def get_playoff_game_logs(season: str) -> pd.DataFrame:
     log = leaguegamelog.LeagueGameLog(
         season=season,
         season_type_all_star=SEASON_TYPE,
-        league_id_nullable="00",
     )
     df = log.get_data_frames()[0]
     df["SEASON"] = season
